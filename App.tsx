@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 export default function App() {  // render call
   enum Operators {
@@ -10,20 +10,31 @@ export default function App() {  // render call
     Div,
     None,
   }
+  enum Signs {
+    Positive,
+    Negative,
+  }
 
   const [currentNumberWhole, setCurrentNumberWhole] = useState(0);
   const [currentNumberDecimal, setCurrentNumberDecimal] = useState(0);
   const [cacheNumber, setCacheNumber] = useState(0);
   const [hasDecimalPoint, setDecimalPoint] = useState(false);
   const [decimalLength, setDecimalLength] = useState(0);
+
+  const [currentSign, setCurrentSign] = useState(Signs.Positive);
   const [currentOperator, setCurrentOperator] = useState(Operators.None);
   const [resetNumber, setResetNumber] = useState(false);
+
+  const [justPressedArithButton, setJustPressedArithButton] = useState(false);
+  const [justPressedNumberButton, setJustPressedNumberButton] = useState(false);
+  const [justPressedResult, setJustPressedResult] = useState(false);
 
   const setNumber = (num: number) => (): void => {
     let newNumberWhole: number = currentNumberWhole;
     let newNumberDecimal: number = currentNumberDecimal;
     let newDecimalLength: number = decimalLength;
     let hasDecimalPointLocal: boolean = hasDecimalPoint;
+    let signLocal: Signs = currentSign;
     
     if (resetNumber)
     {
@@ -31,6 +42,7 @@ export default function App() {  // render call
 
       hasDecimalPointLocal = false;
       setDecimalPoint(hasDecimalPointLocal);
+      setCurrentSign(Signs.Positive);
 
       newNumberWhole = 0;
       newNumberDecimal = 0;
@@ -48,15 +60,35 @@ export default function App() {  // render call
     setCurrentNumberWhole(newNumberWhole);
     setCurrentNumberDecimal(newNumberDecimal);
     setDecimalLength(newDecimalLength);
+    setJustPressedArithButton(false);
+    setJustPressedNumberButton(true);
+    setJustPressedResult(false);
   }
 
   const ACClear = (): void => {
-    setCurrentNumberWhole(0);
-    setCurrentNumberDecimal(0);
-    setCacheNumber(0);
-    setDecimalPoint(false);
-    setDecimalLength(0);
-    setCurrentOperator(Operators.None);
+    let currentNumber: number = currentNumberWhole + currentNumberDecimal * Math.pow(10, -decimalLength);
+
+    if (justPressedResult)
+    {
+      setCacheNumber(0);
+      setCurrentOperator(Operators.None);
+      setJustPressedResult(false);
+    }
+
+    if (currentNumber !== 0)
+    {
+      setCurrentNumberWhole(0);
+      setCurrentNumberDecimal(0);
+      setDecimalPoint(false);
+      setDecimalLength(0);
+      setCurrentSign(Signs.Positive);
+    }
+    else
+    {
+      setCurrentOperator(Operators.None);
+    }
+    
+    setJustPressedNumberButton(false);
   }
 
   const toggleDecimal = (): void => {
@@ -66,17 +98,87 @@ export default function App() {  // render call
     setDecimalPoint(!hasDecimalPoint);
   }
 
-  const setOperator = (operator: Operators) => (): void => {
-    let cacheCurrentNumber: number = currentNumberWhole + currentNumberDecimal * Math.pow(10, -decimalLength);
-
-    if (cacheCurrentNumber === 0 || resetNumber)  // if number is about to be reset -> no cache
+  const toggleSign = (): void => {
+    if (currentNumberWhole !== 0 || currentNumberDecimal !== 0)
     {
-      return;
+      if (currentSign === Signs.Positive)
+      {
+        setCurrentSign(Signs.Negative);
+      }
+      else
+      {
+        setCurrentSign(Signs.Positive);
+      }
+    }
+  }
+
+  const setOperator = (operator: Operators) => (): void => {
+    let signMultiplier: number = currentSign === Signs.Positive ? 1 : -1;
+    let cacheCurrentNumber: number = signMultiplier * (currentNumberWhole + currentNumberDecimal * Math.pow(10, -decimalLength));
+    
+    if (currentOperator != Operators.None && cacheCurrentNumber !== 0 && !resetNumber)
+    {
+      cacheCurrentNumber = getResult();
     }
 
     setCacheNumber(cacheCurrentNumber);
     setCurrentOperator(operator);
     setResetNumber(true);
+    setJustPressedArithButton(true);
+    setJustPressedNumberButton(false);
+  }
+
+  const getResult = (): number => {
+    let result: number = 0;
+    let currentNumber: number = currentNumberWhole + currentNumberDecimal * Math.pow(10, -decimalLength);
+
+    if (currentOperator === Operators.None)
+    {
+      return 0;
+    }
+
+    if (!justPressedResult)
+    {
+      if      (currentOperator === Operators.Add) result = cacheNumber + currentNumber;
+      else if (currentOperator === Operators.Sub) result = cacheNumber - currentNumber;
+      else if (currentOperator === Operators.Mul) result = cacheNumber * currentNumber;
+      else if (currentOperator === Operators.Div) result = cacheNumber / currentNumber;
+    }
+    else
+    {
+      if      (currentOperator === Operators.Add) result = currentNumber + cacheNumber;
+      else if (currentOperator === Operators.Sub) result = currentNumber - cacheNumber;
+      else if (currentOperator === Operators.Mul) result = currentNumber * cacheNumber;
+      else if (currentOperator === Operators.Div) result = currentNumber / cacheNumber;
+    }
+
+    let newCurrentNumberWhole: number = Math.floor(result);
+    let newCurrentNumberDecimal: number = result - newCurrentNumberWhole;  // still in 0.x form
+    let newDecimalLength: number = newCurrentNumberDecimal.toString().length - 1
+    if (newCurrentNumberDecimal !== 0)
+    {
+      newDecimalLength -= 1;
+      newCurrentNumberDecimal *= 10 ** newDecimalLength;
+      setDecimalPoint(true);
+    }
+
+    if (justPressedNumberButton)
+    {
+      setCacheNumber(currentNumber);
+    }
+
+    setCurrentNumberWhole(newCurrentNumberWhole);
+    setCurrentNumberDecimal(newCurrentNumberDecimal);
+    setDecimalLength(newDecimalLength);
+    setResetNumber(true);
+    setJustPressedNumberButton(false);
+
+    return result;
+  }
+
+  const resultButtonFunction = () => {
+    getResult();
+    setJustPressedResult(true);
   }
 
   const getLeadingZeroDecimal = (): string => {
@@ -95,26 +197,28 @@ export default function App() {  // render call
     }
   }
 
-  const getResult = (): void => {
-    let result: number = 0;
-    let currentNumber: number = currentNumberWhole + currentNumberDecimal * Math.pow(10, -decimalLength);
-
-    if (currentOperator === Operators.None || currentNumber === 0)
+  const getSign = (): string => {
+    if (currentSign === Signs.Negative && (currentNumberWhole !== 0 || currentNumberDecimal !== 0))
     {
-      return;
+      return "-";
     }
+    return "";
+  }
 
-    if      (currentOperator === Operators.Add) result = cacheNumber + currentNumber;
-    else if (currentOperator === Operators.Sub) result = cacheNumber - currentNumber;
-    else if (currentOperator === Operators.Mul) result = cacheNumber * currentNumber;
-    else if (currentOperator === Operators.Div) result = cacheNumber / currentNumber;
-
-    let newCurrentNumberWhole: number = Math.floor(result);
-    let newCurrentNumberDecimal: number = result - newCurrentNumberWhole;
-    newCurrentNumberDecimal *= 10 ** (newCurrentNumberDecimal.toString().length - 2); // exclude the "0."
-
-    setCurrentNumberWhole(newCurrentNumberWhole);
-    setCurrentNumberDecimal(newCurrentNumberDecimal);
+  const getArithmeticButtonStyle = (operator: Operators) => {
+    if (operator === currentOperator && justPressedArithButton)
+    {
+      return styles.inverse_arithmetic_button;
+    }
+    return styles.arithmetic_button;
+  }
+  
+  const getArithmeticTextStyle = (operator: Operators) => {
+    if (operator === currentOperator && justPressedArithButton)
+    {
+      return styles.inverse_button_text;
+    }
+    return styles.reg_text;
   }
 
   // ------------------------------------------------------------
@@ -123,7 +227,8 @@ export default function App() {  // render call
       {/* Number display */}
       <View style={styles.result_display}>
         <Text style={[styles.result_text]}>
-          {currentNumberWhole !== 0 ? currentNumberWhole : ""}
+          {getSign()}
+          {currentNumberWhole}
           {hasDecimalPoint ? "," : ""}
           {getLeadingZeroDecimal()}
           {currentNumberDecimal !== 0 ? currentNumberDecimal : ""}
@@ -137,14 +242,14 @@ export default function App() {  // render call
           <TouchableOpacity style={[styles.button, styles.special_button]} onPress={ACClear}>
             <Text style={[styles.button_text, styles.special_text]}>AC</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.special_button]}>
+          <TouchableOpacity style={[styles.button, styles.special_button]} onPress={toggleSign}>
             <Text style={[styles.button_text, styles.special_text]}>+/-</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.special_button]}>
             <Text style={[styles.button_text, styles.special_text]}>%</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.arithmetic_button]} onPress={setOperator(Operators.Div)}>
-            <Text style={[styles.button_text, styles.reg_text, { fontSize: 42 }]}>÷</Text>
+          <TouchableOpacity style={[styles.button, getArithmeticButtonStyle(Operators.Div)]} onPress={setOperator(Operators.Div)}>
+            <Text style={[styles.button_text, getArithmeticTextStyle(Operators.Div), { fontSize: 42 }]}>÷</Text>
           </TouchableOpacity>
         </View>
 
@@ -158,8 +263,8 @@ export default function App() {  // render call
           <TouchableOpacity style={[styles.button, styles.reg_button]} onPress={setNumber(9)}>
             <Text style={[styles.button_text, styles.reg_text]}>9</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.arithmetic_button]} onPress={setOperator(Operators.Mul)}>
-            <Text style={[styles.button_text, styles.reg_text, { fontSize: 42 }]}>×</Text>
+          <TouchableOpacity style={[styles.button, getArithmeticButtonStyle(Operators.Mul)]} onPress={setOperator(Operators.Mul)}>
+            <Text style={[styles.button_text, getArithmeticTextStyle(Operators.Mul), { fontSize: 42 }]}>×</Text>
           </TouchableOpacity>
         </View>
 
@@ -173,8 +278,8 @@ export default function App() {  // render call
           <TouchableOpacity style={[styles.button, styles.reg_button]} onPress={setNumber(6)}>
             <Text style={[styles.button_text, styles.reg_text]}>6</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.arithmetic_button]} onPress={setOperator(Operators.Sub)}>
-            <Text style={[styles.button_text, styles.reg_text, { fontSize: 42 }]}>–</Text>
+          <TouchableOpacity style={[styles.button, getArithmeticButtonStyle(Operators.Sub)]} onPress={setOperator(Operators.Sub)}>
+            <Text style={[styles.button_text, getArithmeticTextStyle(Operators.Sub), { fontSize: 42 }]}>–</Text>
           </TouchableOpacity>
         </View>
 
@@ -188,8 +293,8 @@ export default function App() {  // render call
           <TouchableOpacity style={[styles.button, styles.reg_button]} onPress={setNumber(3)}>
             <Text style={[styles.button_text, styles.reg_text]}>3</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.arithmetic_button]} onPress={setOperator(Operators.Mul)}>
-            <Text style={[styles.button_text, styles.reg_text, { fontSize: 42 }]}>+</Text>
+          <TouchableOpacity style={[styles.button, getArithmeticButtonStyle(Operators.Add)]} onPress={setOperator(Operators.Add)}>
+            <Text style={[styles.button_text, getArithmeticTextStyle(Operators.Add), { fontSize: 42 }]}>+</Text>
           </TouchableOpacity>
         </View>
 
@@ -200,7 +305,7 @@ export default function App() {  // render call
           <TouchableOpacity style={[styles.button, styles.reg_button]} onPress={toggleDecimal}>
             <Text style={[styles.button_text, styles.reg_text]}>,</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.arithmetic_button]} onPress={getResult}>
+          <TouchableOpacity style={[styles.button, styles.arithmetic_button]} onPress={resultButtonFunction}>
             <Text style={[styles.button_text, styles.reg_text, { fontSize: 42 }]}>=</Text>
           </TouchableOpacity>
         </View>
@@ -235,7 +340,7 @@ const styles = StyleSheet.create({
 
   button_row: {
     flex: 1,
-    width: 375,
+    width: 370,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
